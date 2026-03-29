@@ -57,7 +57,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const applyFooter = (embed) =>
     embed
         .setColor(0x2b2d31)
-        .setFooter({ text: "⚡ TBYOKGG LOG BOT • CREATED BY LYMİX 🇹🇷" })
+        .setFooter({ text: "⚡ TBYOKGG LOG BOT • CREATED BY LYMİX ☾✯ " })
         .setTimestamp();
 
 function loadStats() {
