@@ -14,6 +14,7 @@ const STATS_FILE_TMP = path.join(__dirname, "jotun_stats.tmp.json");
 const VOICE_LOG_FILE = path.join(__dirname, "voice_log.json");
 
 const JOTUNLOG_ROLE_ID = "1382093776826400969";
+const YETKILI_ROLE_ID  = "1382093776826400968";
 const SABIT_SES_KANAL_ID = "1399803470302937128";
 
 const LONCA_ROLLERI = {
@@ -21,9 +22,7 @@ const LONCA_ROLLERI = {
     SPARTAN:  "1382093776805302296",
     RULER:    "1382093776805302295",
     CORLEONE: "1382093776805302294",
-    OSMANLI:  "1382093776805302293",
-    "\u0130NFAZ":    "1482754682819575930",
-    HAREKAT:  "1483538542914306049"
+    ALPHA:    "1382093776805302293"
 };
 
 const LONCA_EMOJILERI = {
@@ -31,9 +30,7 @@ const LONCA_EMOJILERI = {
     SPARTAN:  "\uD83D\uDEE1\uFE0F",
     RULER:    "\uD83D\uDC51",
     CORLEONE: "\uD83C\uDF39",
-    OSMANLI:  "\uD83C\uDF19",
-    "\u0130NFAZ":    "\uD83D\uDC80",
-    HAREKAT:  "\uD83C\uDFAF"
+    ALPHA:    "\uD83D\uDD31"
 };
 
 const client = new Client({
@@ -103,7 +100,10 @@ function saveVoiceLog(data) {
 const activeVoiceSessions = new Map();
 
 function hasYetki(member) {
-    return member.roles.cache.has(JOTUNLOG_ROLE_ID);
+    return member.roles.cache.has(YETKILI_ROLE_ID);
+}
+function hasJotunYetki(member) {
+    return member.roles.cache.has(JOTUNLOG_ROLE_ID) || member.roles.cache.has(YETKILI_ROLE_ID);
 }
 
 // --- RATE LIMIT KORUMALI EMBED ---
@@ -255,7 +255,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             // --- /jotunlog ---
             if (interaction.commandName === "jotunlog") {
-                if (!hasYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
+                if (!hasJotunYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
                 await interaction.deferReply();
                 const vChannel = interaction.guild.channels.cache.get(SABIT_SES_KANAL_ID);
                 if (!vChannel) return interaction.editReply("\u274C Ses kanal\u0131 bulunamad\u0131!");
