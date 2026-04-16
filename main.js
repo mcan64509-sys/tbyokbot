@@ -23,6 +23,7 @@ const LONCA_ROLLERI = {
     RULER:    "1382093776805302295",
     CORLEONE: "1382093776805302294",
     ALPHA:    "1382093776805302293"
+    ARES:"1382093776805302295"
 };
 
 const LONCA_EMOJILERI = {
@@ -31,6 +32,7 @@ const LONCA_EMOJILERI = {
     RULER:    "\uD83D\uDC51",
     CORLEONE: "\uD83C\uDF39",
     ALPHA:    "\uD83D\uDD31"
+    ARES:"\uD83D\uDD25" 
 };
 
 const client = new Client({
