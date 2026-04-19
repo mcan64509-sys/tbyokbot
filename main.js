@@ -103,26 +103,8 @@ function hasJotunYetki(member) {
     return member.roles.cache.has(JOTUNLOG_ROLE_ID) || member.roles.cache.has(YETKILI_ROLE_ID);
 }
 
-async function sendEmbedsWithRateLimit(replyFn, followUpFn, embeds) {
-    if (embeds.length === 0) return;
-    try {
-        await replyFn({ embeds: [embeds[0]] });
-    } catch (e) {
-        console.error("\u274C ilk embed gonderilemedi:", e.message);
-        return;
-    }
-    for (let i = 1; i < embeds.length; i++) {
-        await sleep(1200);
-        try {
-            await followUpFn({ embeds: [embeds[i]] });
-        } catch (e) {
-            console.error(`\u274C Embed ${i + 1} gonderilemedi:`, e.message);
-        }
-    }
-}
-
-function buildGenelsonucPages(stats) {
-    const pages = [];
+function buildGenelsonucEmbeds(stats) {
+    const embeds = [];
     for (const [loncaAdi] of Object.entries(LONCA_ROLLERI)) {
         const emoji = LONCA_EMOJILERI[loncaAdi] || "\uD83D\uDD39";
         const uyeler = Object.values(stats)
@@ -130,29 +112,15 @@ function buildGenelsonucPages(stats) {
             .sort((a, b) => b.setCount - a.setCount);
         if (uyeler.length === 0) continue;
         const toplamKatilim = uyeler.reduce((sum, u) => sum + u.setCount, 0);
-        const chunkSize = 25;
-        for (let i = 0; i < uyeler.length; i += chunkSize) {
-            const chunk = uyeler.slice(i, i + chunkSize);
-            const altSayfa = Math.floor(i / chunkSize) + 1;
-            const toplamAltSayfa = Math.ceil(uyeler.length / chunkSize);
-            const baslik = toplamAltSayfa > 1
-                ? `${emoji} ${loncaAdi} \u2014 Toplam: ${toplamKatilim} Kat\u0131l\u0131m (${altSayfa}/${toplamAltSayfa})`
-                : `${emoji} ${loncaAdi} \u2014 Toplam: ${toplamKatilim} Kat\u0131l\u0131m`;
-            const liste = chunk.map(m =>
-                `\uD83D\uDD38 **${m.displayName}** \u2022 ${m.guildName} \u2022 **${m.setCount} Set**`
-            ).join("\n");
-            pages.push(applyFooter(new EmbedBuilder().setTitle(baslik).setDescription(liste)));
-        }
+        const liste = uyeler.map(u =>
+            `\uD83D\uDD38 **${u.displayName}** \u2022 ${u.guildName} \u2022 **${u.setCount} Set**`
+        ).join("\n");
+        embeds.push(applyFooter(new EmbedBuilder()
+            .setTitle(`${emoji} ${loncaAdi} \u2014 Toplam: ${toplamKatilim} Kat\u0131l\u0131m`)
+            .setDescription(liste.substring(0, 4000))
+        ));
     }
-    return pages;
-}
-
-function buildPageButtons(current, total) {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("page_prev").setLabel("\u25C4 Geri").setStyle(ButtonStyle.Secondary).setDisabled(current === 0),
-        new ButtonBuilder().setCustomId("page_info").setLabel(`${current + 1} / ${total}`).setStyle(ButtonStyle.Primary).setDisabled(true),
-        new ButtonBuilder().setCustomId("page_next").setLabel("\u0130leri \u25BA").setStyle(ButtonStyle.Secondary).setDisabled(current === total - 1)
-    );
+    return embeds;
 }
 
 const commands = [
@@ -222,7 +190,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     .setTitle("\uD83D\uDCCB TBYOKGG Bot Komut Rehberi")
                     .addFields(
                         { name: "\uD83C\uDFAF /jotunlog", value: "Sesteki \u00fcyeleri kaydeder, lonca lonca embed atar. *(Yetkili)*", inline: false },
-                        { name: "\uD83D\uDCCA /genelsonuc", value: "T\u00fcm loncalar\u0131n set s\u0131ralamas\u0131 (sayfalama ile).", inline: false },
+                        { name: "\uD83D\uDCCA /genelsonuc", value: "T\u00fcm loncalar\u0131n set s\u0131ralamas\u0131.", inline: false },
                         { name: "\uD83D\uDD0D /loncasonuc", value: "Dropdown'dan lonca sec, o loncan\u0131n listesini goster.", inline: false },
                         { name: "\uD83D\uDC64 /istatistik", value: "\u00DCye bazl\u0131 lonca ve set sorgusu.", inline: false },
                         { name: "\u2795 /setekle", value: "Manuel set ekleme. *(Yetkili)*", inline: true },
@@ -261,46 +229,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
                         .setDescription(liste.substring(0, 4000))
                     ));
                 }
-                await sendEmbedsWithRateLimit(
-                    (opts) => interaction.editReply(opts),
-                    (opts) => interaction.followUp(opts),
-                    logEmbeds
-                );
+                await interaction.editReply({ embeds: [logEmbeds[0]] });
+                for (let i = 1; i < logEmbeds.length; i++) {
+                    await sleep(1200);
+                    await interaction.followUp({ embeds: [logEmbeds[i]] });
+                }
             }
 
-            // --- /genelsonuc --- (kalici mesaj, butonlar 10 dakika aktif)
             if (interaction.commandName === "genelsonuc") {
                 await interaction.deferReply();
-                const pages = buildGenelsonucPages(stats);
-                if (pages.length === 0) return interaction.editReply("\u274C Hen\u00fcz hi\u00e7 veri yok.");
-                let current = 0;
-                const msg = await interaction.editReply({
-                    embeds: [pages[current]],
-                    components: pages.length > 1 ? [buildPageButtons(current, pages.length)] : []
-                });
-                if (pages.length <= 1) return;
-                const collector = msg.createMessageComponentCollector({ componentType: ComponentType.Button, time: 600000 });
-                collector.on("collect", async (btn) => {
-                    try {
-                        if (btn.user.id !== interaction.user.id) return btn.reply({ content: 'Bu buton sana ait degil.', ephemeral: true });
-                        if (btn.customId === "page_prev" && current > 0) current--;
-                        if (btn.customId === "page_next" && current < pages.length - 1) current++;
-                        await btn.update({ embeds: [pages[current]], components: [buildPageButtons(current, pages.length)] });
-                    } catch (e) { console.error("\u274C Buton hatas\u0131:", e.message); }
-                });
-                // Süre dolunca butonları kaldır ama mesajı silme
-                collector.on("end", async () => {
-                    try { await msg.edit({ components: [] }); } catch {}
-                });
+                const embeds = buildGenelsonucEmbeds(stats);
+                if (embeds.length === 0) return interaction.editReply("\u274C Hen\u00fcz hi\u00e7 veri yok.");
+                await interaction.editReply({ embeds: [embeds[0]] });
+                for (let i = 1; i < embeds.length; i++) {
+                    await sleep(1200);
+                    await interaction.followUp({ embeds: [embeds[i]] });
+                }
             }
 
-            // --- /loncasonuc --- (kalici mesaj)
             if (interaction.commandName === "loncasonuc") {
                 const select = new StringSelectMenuBuilder()
                     .setCustomId("lonca_sec")
                     .setPlaceholder("\uD83D\uDD0D Lonca se\u00e7iniz...")
                     .addOptions(Object.keys(LONCA_ROLLERI).map(name => ({ label: `${LONCA_EMOJILERI[name] || "\uD83D\uDD39"} ${name}`, value: name })));
-                // ephemeral kaldirildi - herkes gorebilir ve kalici
                 return interaction.reply({
                     content: "**\uD83D\uDD0D Lonca Se\u00e7imi**",
                     components: [new ActionRowBuilder().addComponents(select)]
@@ -378,9 +329,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 }
 
                 let desc = "";
-                if (aktifler.length > 0) {
-                    desc += `**\uD83D\uDFE2 \u015EU AN \u0130\u00c7ER\u0130DE:**\n${aktifler.join("\n")}\n\n`;
-                }
+                if (aktifler.length > 0) desc += `**\uD83D\uDFE2 \u015EU AN \u0130\u00c7ER\u0130DE:**\n${aktifler.join("\n")}\n\n`;
                 if (gosterilenLog.length > 0) {
                     desc += `**\uD83D\uDCCB SON ${gosterilenLog.length} KAYIT:**\n`;
                     desc += gosterilenLog.map(k =>
@@ -414,7 +363,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
             }
         }
 
-        // --- SELECT MENU ---
         if (interaction.isStringSelectMenu() && interaction.customId === "lonca_sec") {
             await interaction.deferUpdate();
             const stats = loadStats();
@@ -425,7 +373,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
             const toplamKatilim = uyeler.reduce((sum, u) => sum + u.setCount, 0);
             const liste = uyeler.map(u => `\uD83D\uDD38 **${u.displayName}** \u2022 ${u.guildName} \u2022 **${u.setCount} Set**`).join("\n").substring(0, 4000);
             const embed = applyFooter(new EmbedBuilder().setTitle(`${emoji} ${selected} \u2014 Toplam: ${toplamKatilim} Kat\u0131l\u0131m`).setDescription(liste));
-            // Dropdown'u kaldır, sadece sonucu göster - kalıcı mesaj
             return interaction.editReply({ embeds: [embed], components: [] });
         }
 
