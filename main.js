@@ -22,7 +22,7 @@ const LONCA_ROLLERI = {
   SPARTAN: "1382093776805302296",
   CORLEONE:"1382093776805302294",
   ALPHA:   "1382093776805302293",
-  ARES:    "1494407309827506267" // 👈 burası
+  ARES:    "1494407309827506267"
 };
 
 const LONCA_EMOJILERI = {
@@ -30,7 +30,7 @@ const LONCA_EMOJILERI = {
   SPARTAN: "\uD83D\uDEE1\uFE0F",
   RULER:   "\uD83D\uDC51",
   ALPHA:   "\uD83D\uDD31",
-  ARES:    "\u2694\uFE0F" // 👈 burası
+  ARES:    "\u2694\uFE0F"
 };
 
 const client = new Client({
@@ -60,7 +60,6 @@ function nowTR() {
     return new Date().toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" });
 }
 
-// --- STATS ---
 function loadStats() {
     try {
         if (!fs.existsSync(STATS_FILE)) return {};
@@ -79,7 +78,6 @@ function saveStats(data) {
     }
 }
 
-// --- VOICE LOG ---
 function loadVoiceLog() {
     try {
         if (!fs.existsSync(VOICE_LOG_FILE)) return [];
@@ -96,7 +94,6 @@ function saveVoiceLog(data) {
     }
 }
 
-// Aktif oturumlar (giris yapip henuz cikmayanlar)
 const activeVoiceSessions = new Map();
 
 function hasYetki(member) {
@@ -106,7 +103,6 @@ function hasJotunYetki(member) {
     return member.roles.cache.has(JOTUNLOG_ROLE_ID) || member.roles.cache.has(YETKILI_ROLE_ID);
 }
 
-// --- RATE LIMIT KORUMALI EMBED ---
 async function sendEmbedsWithRateLimit(replyFn, followUpFn, embeds) {
     if (embeds.length === 0) return;
     try {
@@ -125,7 +121,6 @@ async function sendEmbedsWithRateLimit(replyFn, followUpFn, embeds) {
     }
 }
 
-// --- SAYFALAMA ---
 function buildGenelsonucPages(stats) {
     const pages = [];
     for (const [loncaAdi] of Object.entries(LONCA_ROLLERI)) {
@@ -160,7 +155,6 @@ function buildPageButtons(current, total) {
     );
 }
 
-// --- KOMUTLAR ---
 const commands = [
     new SlashCommandBuilder().setName("yard\u0131m").setDescription("\uD83D\uDCCB T\u00fcm komutlar\u0131 listeler."),
     new SlashCommandBuilder().setName("genelsonuc").setDescription("\uD83D\uDCCA T\u00fcm loncalar\u0131n set s\u0131ralamas\u0131."),
@@ -180,7 +174,6 @@ const commands = [
         .addUserOption(o => o.setName("kullanici").setDescription("Belirli bir kullanicinin kayitlari").setRequired(false))
 ].map(c => c.toJSON());
 
-// --- BOT HAZIR ---
 client.once(Events.ClientReady, async () => {
     console.log(`\u2705 Bot haz\u0131r: ${client.user.tag}`);
     const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -195,31 +188,20 @@ client.once(Events.ClientReady, async () => {
 client.on("disconnect", () => console.warn("\u26A0\uFE0F Bot baglantisi kesildi."));
 client.on("error", (e) => console.error("\u274C Client hatas\u0131:", e.message));
 
-// --- SES KANALI TAKİP ---
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     try {
         const userId = newState.member?.id || oldState.member?.id;
         const displayName = newState.member?.displayName || oldState.member?.displayName || "Bilinmiyor";
 
-        // Kanala GİRİŞ
         if (newState.channelId === SABIT_SES_KANAL_ID && oldState.channelId !== SABIT_SES_KANAL_ID) {
-            activeVoiceSessions.set(userId, {
-                displayName,
-                giris: nowTR()
-            });
+            activeVoiceSessions.set(userId, { displayName, giris: nowTR() });
         }
 
-        // Kanaldan ÇIKIŞ
         if (oldState.channelId === SABIT_SES_KANAL_ID && newState.channelId !== SABIT_SES_KANAL_ID) {
             const session = activeVoiceSessions.get(userId);
             if (session) {
                 const log = loadVoiceLog();
-                log.unshift({
-                    kullanici: session.displayName,
-                    userId,
-                    giris: session.giris,
-                    cikis: nowTR()
-                });
+                log.unshift({ kullanici: session.displayName, userId, giris: session.giris, cikis: nowTR() });
                 saveVoiceLog(log.slice(0, 1000));
                 activeVoiceSessions.delete(userId);
             }
@@ -229,14 +211,12 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     }
 });
 
-// --- ETKİLEŞİMLER ---
 client.on(Events.InteractionCreate, async (interaction) => {
     try {
         if (interaction.isChatInputCommand()) {
             const stats = loadStats();
             const member = interaction.member;
 
-            // --- /yardım ---
             if (interaction.commandName === "yard\u0131m") {
                 const embed = new EmbedBuilder()
                     .setTitle("\uD83D\uDCCB TBYOKGG Bot Komut Rehberi")
@@ -253,7 +233,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 return interaction.reply({ embeds: [applyFooter(embed)] });
             }
 
-            // --- /jotunlog ---
             if (interaction.commandName === "jotunlog") {
                 if (!hasJotunYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
                 await interaction.deferReply();
@@ -263,11 +242,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 vChannel.members.forEach(m => {
                     for (const [lName, rId] of Object.entries(LONCA_ROLLERI)) {
                         if (m.roles.cache.has(rId)) {
-                            stats[m.id] = {
-                                displayName: m.displayName,
-                                guildName: lName,
-                                setCount: (stats[m.id]?.setCount || 0) + 1
-                            };
+                            stats[m.id] = { displayName: m.displayName, guildName: lName, setCount: (stats[m.id]?.setCount || 0) + 1 };
                             if (!currentLog[lName]) currentLog[lName] = [];
                             currentLog[lName].push({ name: m.displayName, setCount: stats[m.id].setCount });
                             break;
@@ -293,7 +268,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 );
             }
 
-            // --- /genelsonuc ---
+            // --- /genelsonuc --- (kalici mesaj, butonlar 10 dakika aktif)
             if (interaction.commandName === "genelsonuc") {
                 await interaction.deferReply();
                 const pages = buildGenelsonucPages(stats);
@@ -304,31 +279,34 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     components: pages.length > 1 ? [buildPageButtons(current, pages.length)] : []
                 });
                 if (pages.length <= 1) return;
-                const collector = msg.createMessageComponentCollector({ componentType: ComponentType.Button, time: 60000 });
+                const collector = msg.createMessageComponentCollector({ componentType: ComponentType.Button, time: 600000 });
                 collector.on("collect", async (btn) => {
                     try {
+                        if (btn.user.id !== interaction.user.id) return btn.reply({ content: 'Bu buton sana ait degil.', ephemeral: true });
                         if (btn.customId === "page_prev" && current > 0) current--;
                         if (btn.customId === "page_next" && current < pages.length - 1) current++;
                         await btn.update({ embeds: [pages[current]], components: [buildPageButtons(current, pages.length)] });
                     } catch (e) { console.error("\u274C Buton hatas\u0131:", e.message); }
                 });
-                collector.on("end", async () => { try { await msg.edit({ components: [] }); } catch {} });
+                // Süre dolunca butonları kaldır ama mesajı silme
+                collector.on("end", async () => {
+                    try { await msg.edit({ components: [] }); } catch {}
+                });
             }
 
-            // --- /loncasonuc ---
+            // --- /loncasonuc --- (kalici mesaj)
             if (interaction.commandName === "loncasonuc") {
                 const select = new StringSelectMenuBuilder()
                     .setCustomId("lonca_sec")
                     .setPlaceholder("\uD83D\uDD0D Lonca se\u00e7iniz...")
                     .addOptions(Object.keys(LONCA_ROLLERI).map(name => ({ label: `${LONCA_EMOJILERI[name] || "\uD83D\uDD39"} ${name}`, value: name })));
+                // ephemeral kaldirildi - herkes gorebilir ve kalici
                 return interaction.reply({
                     content: "**\uD83D\uDD0D Lonca Se\u00e7imi**",
-                    components: [new ActionRowBuilder().addComponents(select)],
-                    ephemeral: true
+                    components: [new ActionRowBuilder().addComponents(select)]
                 });
             }
 
-            // --- /istatistik ---
             if (interaction.commandName === "istatistik") {
                 await interaction.deferReply();
                 const targetUser = interaction.options.getUser("uye");
@@ -343,7 +321,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 return interaction.editReply({ embeds: [applyFooter(embed)] });
             }
 
-            // --- /setekle ---
             if (interaction.commandName === "setekle") {
                 if (!hasYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
                 await interaction.deferReply();
@@ -358,7 +335,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 return interaction.editReply(`\u2705 **${m.displayName}** kullan\u0131c\u0131s\u0131na **${amount}** set eklendi. ${emoji} Toplam: **${stats[targetUser.id].setCount} Set**`);
             }
 
-            // --- /setsil ---
             if (interaction.commandName === "setsil") {
                 if (!hasYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
                 await interaction.deferReply();
@@ -371,28 +347,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 return interaction.editReply(`\uD83D\uDDD1\uFE0F **${m.displayName}** kullan\u0131c\u0131s\u0131ndan **${amount}** set silindi. Kalan: **${stats[targetUser.id].setCount} Set**`);
             }
 
-            // --- /logsıfırla ---
             if (interaction.commandName === "logs\u0131f\u0131rla") {
                 if (!hasYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
                 saveStats({});
                 return interaction.reply("\uD83D\uDDD1\uFE0F **T\u00fcm veriler ba\u015far\u0131yla s\u0131f\u0131rland\u0131!** Art\u0131k kay\u0131t temiz.");
             }
 
-            // --- /kayıtlar ---
             if (interaction.commandName === "kay\u0131tlar") {
                 await interaction.deferReply({ ephemeral: true });
                 const adet = interaction.options.getInteger("adet") || 20;
                 const hedefKullanici = interaction.options.getUser("kullanici");
                 let log = loadVoiceLog();
 
-                // Belirli kullanici filtresi
                 if (hedefKullanici) {
                     const m = await interaction.guild.members.fetch(hedefKullanici.id).catch(() => null);
                     const aranan = m?.displayName || hedefKullanici.username;
                     log = log.filter(k => k.kullanici === aranan || k.userId === hedefKullanici.id);
                 }
 
-                // Aktif oturumları da göster
                 const aktifler = [];
                 for (const [uid, session] of activeVoiceSessions.entries()) {
                     if (!hedefKullanici || uid === hedefKullanici.id) {
@@ -416,7 +388,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     ).join("\n");
                 }
 
-                // Cok uzunsa parcalara bol
                 const chunks = [];
                 const lines = desc.split("\n");
                 let current = "";
@@ -454,6 +425,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             const toplamKatilim = uyeler.reduce((sum, u) => sum + u.setCount, 0);
             const liste = uyeler.map(u => `\uD83D\uDD38 **${u.displayName}** \u2022 ${u.guildName} \u2022 **${u.setCount} Set**`).join("\n").substring(0, 4000);
             const embed = applyFooter(new EmbedBuilder().setTitle(`${emoji} ${selected} \u2014 Toplam: ${toplamKatilim} Kat\u0131l\u0131m`).setDescription(liste));
+            // Dropdown'u kaldır, sadece sonucu göster - kalıcı mesaj
             return interaction.editReply({ embeds: [embed], components: [] });
         }
 
