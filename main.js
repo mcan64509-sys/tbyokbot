@@ -11,11 +11,15 @@ const {
 const { TOKEN, CLIENT_ID, GUILD_ID } = process.env;
 const STATS_FILE = path.join(__dirname, "jotun_stats.json");
 const STATS_FILE_TMP = path.join(__dirname, "jotun_stats.tmp.json");
+const GENERAL_STATS_FILE = path.join(__dirname, "general_stats.json");
+const GENERAL_STATS_FILE_TMP = path.join(__dirname, "general_stats.tmp.json");
 const VOICE_LOG_FILE = path.join(__dirname, "voice_log.json");
 
 const JOTUNLOG_ROLE_ID = "1382093776826400969";
 const YETKILI_ROLE_ID  = "1382093776826400968";
 const SABIT_SES_KANAL_ID = "1399803470302937128";
+const GENERAL_SES_KANAL_ID = "1400152390409257000";
+const GENERAL_METIN_KANAL_ID = "1498399474903683193";
 
 const LONCA_ROLLERI = {
   VUSLAT:  "1382093776805302298",
@@ -75,6 +79,23 @@ function saveStats(data) {
         fs.renameSync(STATS_FILE_TMP, STATS_FILE);
     } catch (e) {
         console.error("\u26A0\uFE0F Stats kaydedilemedi:", e.message);
+    }
+}
+
+function loadGeneralStats() {
+    try {
+        if (!fs.existsSync(GENERAL_STATS_FILE)) return { toplamKivrik: 0, users: {} };
+        return JSON.parse(fs.readFileSync(GENERAL_STATS_FILE, "utf8"));
+    } catch (e) {
+        return { toplamKivrik: 0, users: {} };
+    }
+}
+function saveGeneralStats(data) {
+    try {
+        fs.writeFileSync(GENERAL_STATS_FILE_TMP, JSON.stringify(data, null, 2), "utf8");
+        fs.renameSync(GENERAL_STATS_FILE_TMP, GENERAL_STATS_FILE);
+    } catch (e) {
+        console.error("\u26A0\uFE0F General Stats kaydedilemedi:", e.message);
     }
 }
 
@@ -139,7 +160,16 @@ const commands = [
     new SlashCommandBuilder().setName("logs\u0131f\u0131rla").setDescription("\uD83D\uDDD1\uFE0F T\u00fcm verileri s\u0131f\u0131rlar."),
     new SlashCommandBuilder().setName("kay\u0131tlar").setDescription("\uD83D\uDD0D Ses kanal\u0131 giri\u015f/\u00e7\u0131k\u0131\u015f listesi.")
         .addIntegerOption(o => o.setName("adet").setDescription("Kac kayit gosterilsin (varsayilan: 20)").setRequired(false))
-        .addUserOption(o => o.setName("kullanici").setDescription("Belirli bir kullanicinin kayitlari").setRequired(false))
+        .addUserOption(o => o.setName("kullanici").setDescription("Belirli bir kullanicinin kayitlari").setRequired(false)),
+    new SlashCommandBuilder().setName("generallog").setDescription("\uD83D\uDCCB General ses kanal\u0131ndakilere +1 set ekler.")
+        .addIntegerOption(o => o.setName("kivrik").setDescription("K\u0131vr\u0131k anahtar say\u0131s\u0131").setRequired(true)),
+    new SlashCommandBuilder().setName("generalsonuc").setDescription("\uD83D\uDCCA General set s\u0131ralamas\u0131."),
+    new SlashCommandBuilder().setName("generalsetekle").setDescription("\u2795 General i\u00e7in manuel set ekler.")
+        .addUserOption(o => o.setName("uye").setDescription("\u00DCye").setRequired(true))
+        .addIntegerOption(o => o.setName("miktar").setDescription("Miktar").setRequired(true)),
+    new SlashCommandBuilder().setName("generalsetsil").setDescription("\u2796 General i\u00e7in manuel set siler.")
+        .addUserOption(o => o.setName("uye").setDescription("\u00DCye").setRequired(true))
+        .addIntegerOption(o => o.setName("miktar").setDescription("Miktar").setRequired(true)),
 ].map(c => c.toJSON());
 
 client.once(Events.ClientReady, async () => {
@@ -196,7 +226,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
                         { name: "\u2795 /setekle", value: "Manuel set ekleme. *(Yetkili)*", inline: true },
                         { name: "\u2796 /setsil", value: "Manuel set silme. *(Yetkili)*", inline: true },
                         { name: "\uD83D\uDDD1\uFE0F /logs\u0131f\u0131rla", value: "T\u00fcm verileri s\u0131f\u0131rlar. *(Yetkili)*", inline: false },
-                        { name: "\uD83D\uDD0D /kay\u0131tlar", value: "Ses kanal\u0131 giris/cikis listesi. *(Sadece sen gorursun)*", inline: false }
+                        { name: "\uD83D\uDD0D /kay\u0131tlar", value: "Ses kanal\u0131 giris/cikis listesi.", inline: false },
+                        { name: "\uD83D\uDCCB /generallog", value: "General ses kanal\u0131ndakilere +1 set ekler. *(Yetkili)*", inline: false },
+                        { name: "\uD83D\uDCCA /generalsonuc", value: "General set s\u0131ralamas\u0131.", inline: false },
+                        { name: "\u2795 /generalsetekle", value: "General i\u00e7in manuel set ekler. *(Yetkili)*", inline: true },
+                        { name: "\u2796 /generalsetsil", value: "General i\u00e7in manuel set siler. *(Yetkili)*", inline: true },
                     );
                 return interaction.reply({ embeds: [applyFooter(embed)] });
             }
@@ -324,17 +358,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 }
 
                 const gosterilenLog = log.slice(0, adet);
-                if (gosterilenLog.length === 0 && aktifler.length === 0) {
-                    return interaction.editReply("\u274C Hi\u00e7 kay\u0131t bulunamad\u0131.");
-                }
+                if (gosterilenLog.length === 0 && aktifler.length === 0) return interaction.editReply("\u274C Hi\u00e7 kay\u0131t bulunamad\u0131.");
 
                 let desc = "";
                 if (aktifler.length > 0) desc += `**\uD83D\uDFE2 \u015EU AN \u0130\u00c7ER\u0130DE:**\n${aktifler.join("\n")}\n\n`;
                 if (gosterilenLog.length > 0) {
                     desc += `**\uD83D\uDCCB SON ${gosterilenLog.length} KAYIT:**\n`;
-                    desc += gosterilenLog.map(k =>
-                        `\uD83D\uDD34 **${k.kullanici}** \u2022 Giri\u015f: \`${k.giris}\` \u2022 \u00c7\u0131k\u0131\u015f: \`${k.cikis}\``
-                    ).join("\n");
+                    desc += gosterilenLog.map(k => `\uD83D\uDD34 **${k.kullanici}** \u2022 Giri\u015f: \`${k.giris}\` \u2022 \u00c7\u0131k\u0131\u015f: \`${k.cikis}\``).join("\n");
                 }
 
                 const chunks = [];
@@ -350,16 +380,111 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     ? `\uD83D\uDD0D ${hedefKullanici.username} \u2014 Ses Kanal\u0131 Kay\u0131tlar\u0131`
                     : `\uD83D\uDD0D Ses Kanal\u0131 Giri\u015f/\u00c7\u0131k\u0131\u015f Kay\u0131tlar\u0131`;
 
-                await interaction.editReply({
-                    embeds: [applyFooter(new EmbedBuilder().setTitle(baslik).setDescription(chunks[0].substring(0, 4000)))]
-                });
+                await interaction.editReply({ embeds: [applyFooter(new EmbedBuilder().setTitle(baslik).setDescription(chunks[0].substring(0, 4000)))] });
                 for (let i = 1; i < chunks.length; i++) {
                     await sleep(1000);
-                    await interaction.followUp({
-                        embeds: [applyFooter(new EmbedBuilder().setTitle(`${baslik} (${i+1}/${chunks.length})`).setDescription(chunks[i].substring(0, 4000)))],
-                        ephemeral: true
-                    });
+                    await interaction.followUp({ embeds: [applyFooter(new EmbedBuilder().setTitle(`${baslik} (${i+1}/${chunks.length})`).setDescription(chunks[i].substring(0, 4000)))], ephemeral: true });
                 }
+            }
+
+            // --- /generallog ---
+            if (interaction.commandName === "generallog") {
+                if (!hasYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
+                await interaction.deferReply();
+                const kivrik = interaction.options.getInteger("kivrik");
+                const vChannel = interaction.guild.channels.cache.get(GENERAL_SES_KANAL_ID);
+                if (!vChannel) return interaction.editReply("\u274C General ses kanal\u0131 bulunamad\u0131!");
+                if (vChannel.members.size === 0) return interaction.editReply("\u274C General ses kanal\u0131nda kimse yok!");
+
+                const generalStats = loadGeneralStats();
+                generalStats.toplamKivrik = (generalStats.toplamKivrik || 0) + kivrik;
+
+                const eklenenler = [];
+                vChannel.members.forEach(m => {
+                    generalStats.users[m.id] = {
+                        displayName: m.displayName,
+                        setCount: (generalStats.users[m.id]?.setCount || 0) + 1
+                    };
+                    eklenenler.push({ name: m.displayName, setCount: generalStats.users[m.id].setCount });
+                });
+                saveGeneralStats(generalStats);
+
+                const liste = eklenenler.map(u => `\uD83D\uDD38 **${u.name}** \u2022 **${u.setCount} Set**`).join("\n");
+                const embed = applyFooter(new EmbedBuilder()
+                    .setTitle("\uD83D\uDCCB GENERAL LOG")
+                    .setDescription(liste.substring(0, 4000))
+                    .addFields(
+                        { name: "\uD83D\uDD11 K\u0131vr\u0131k Eklendi", value: `**${kivrik}**`, inline: true },
+                        { name: "\uD83D\uDD11 Toplam K\u0131vr\u0131k", value: `**${generalStats.toplamKivrik}**`, inline: true },
+                        { name: "\uD83D\uDC65 \u0130\u015flenen", value: `**${eklenenler.length} ki\u015fi**`, inline: true }
+                    )
+                );
+
+                await interaction.editReply({ embeds: [embed] });
+
+                // Metin kanalına da gönder
+                const textChannel = interaction.guild.channels.cache.get(GENERAL_METIN_KANAL_ID);
+                if (textChannel && textChannel.id !== interaction.channelId) {
+                    await sleep(500);
+                    await textChannel.send({ embeds: [embed] }).catch(() => {});
+                }
+            }
+
+            // --- /generalsonuc ---
+            if (interaction.commandName === "generalsonuc") {
+                await interaction.deferReply();
+                const generalStats = loadGeneralStats();
+                const uyeler = Object.values(generalStats.users || {}).sort((a, b) => b.setCount - a.setCount);
+                if (uyeler.length === 0) return interaction.editReply("\u274C Hen\u00fcz general verisi yok.");
+
+                const toplamSet = uyeler.reduce((sum, u) => sum + u.setCount, 0);
+                const liste = uyeler.map((u, i) => {
+                    let medal = `**${i + 1}.**`;
+                    if (i === 0) medal = "\uD83E\uDD47";
+                    if (i === 1) medal = "\uD83E\uDD48";
+                    if (i === 2) medal = "\uD83E\uDD49";
+                    return `${medal} **${u.displayName}** \u2022 **${u.setCount} Set**`;
+                }).join("\n");
+
+                const embed = applyFooter(new EmbedBuilder()
+                    .setTitle("\uD83D\uDCCB GENERAL SIRALAMASI")
+                    .setDescription(liste.substring(0, 4000))
+                    .addFields(
+                        { name: "\uD83C\uDFC6 Toplam Set", value: `**${toplamSet}**`, inline: true },
+                        { name: "\uD83D\uDD11 Toplam K\u0131vr\u0131k", value: `**${generalStats.toplamKivrik || 0}**`, inline: true }
+                    )
+                );
+                return interaction.editReply({ embeds: [embed] });
+            }
+
+            // --- /generalsetekle ---
+            if (interaction.commandName === "generalsetekle") {
+                if (!hasYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
+                await interaction.deferReply();
+                const targetUser = interaction.options.getUser("uye");
+                const amount = interaction.options.getInteger("miktar");
+                const m = await interaction.guild.members.fetch(targetUser.id);
+                const generalStats = loadGeneralStats();
+                generalStats.users[targetUser.id] = {
+                    displayName: m.displayName,
+                    setCount: (generalStats.users[targetUser.id]?.setCount || 0) + amount
+                };
+                saveGeneralStats(generalStats);
+                return interaction.editReply(`\u2705 **${m.displayName}** kullan\u0131c\u0131s\u0131na General i\u00e7in **${amount}** set eklendi. Toplam: **${generalStats.users[targetUser.id].setCount} Set**`);
+            }
+
+            // --- /generalsetsil ---
+            if (interaction.commandName === "generalsetsil") {
+                if (!hasYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
+                await interaction.deferReply();
+                const targetUser = interaction.options.getUser("uye");
+                const amount = interaction.options.getInteger("miktar");
+                const m = await interaction.guild.members.fetch(targetUser.id);
+                const generalStats = loadGeneralStats();
+                if (!generalStats.users[targetUser.id]) return interaction.editReply("\u274C Bu \u00fcyeye ait general verisi bulunamad\u0131.");
+                generalStats.users[targetUser.id].setCount = Math.max(0, generalStats.users[targetUser.id].setCount - amount);
+                saveGeneralStats(generalStats);
+                return interaction.editReply(`\uD83D\uDDD1\uFE0F **${m.displayName}** kullan\u0131c\u0131s\u0131ndan General i\u00e7in **${amount}** set silindi. Kalan: **${generalStats.users[targetUser.id].setCount} Set**`);
             }
         }
 
