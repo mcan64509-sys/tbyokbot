@@ -236,39 +236,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
             }
 
             if (interaction.commandName === "jotunlog") {
-                if (!hasJotunYetki(member)) return interaction.reply({ content: "\uD83D\uDEAB Bu komutu kullanma yetkiniz yok.", ephemeral: true });
-                await interaction.deferReply();
-                const vChannel = interaction.guild.channels.cache.get(SABIT_SES_KANAL_ID);
-                if (!vChannel) return interaction.editReply("\u274C Ses kanal\u0131 bulunamad\u0131!");
-                const currentLog = {};
-                vChannel.members.forEach(m => {
-                    for (const [lName, rId] of Object.entries(LONCA_ROLLERI)) {
-                        if (m.roles.cache.has(rId)) {
-                            stats[m.id] = { displayName: m.displayName, guildName: lName, setCount: (stats[m.id]?.setCount || 0) + 1 };
-                            if (!currentLog[lName]) currentLog[lName] = [];
-                            currentLog[lName].push({ name: m.displayName, setCount: stats[m.id].setCount });
-                            break;
-                        }
-                    }
-                });
-                saveStats(stats);
-                if (Object.keys(currentLog).length === 0) return interaction.editReply("\u274C Ses kanal\u0131nda kay\u0131tl\u0131 lonca rol\u00fcne sahip kimse bulunamad\u0131.");
-                const logEmbeds = [];
-                for (const [loncaAdi, uyeler] of Object.entries(currentLog)) {
-                    const emoji = LONCA_EMOJILERI[loncaAdi] || "\uD83D\uDD39";
-                    const toplamKatilim = uyeler.reduce((sum, u) => sum + u.setCount, 0);
-                    const liste = uyeler.map(u => `\uD83D\uDD38 **${u.name}** \u2022 ${loncaAdi} \u2022 **${u.setCount} Set**`).join("\n");
-                    logEmbeds.push(applyFooter(new EmbedBuilder()
-                        .setTitle(`${emoji} ${loncaAdi} \u2014 Toplam: ${toplamKatilim} Kat\u0131l\u0131m`)
-                        .setDescription(liste.substring(0, 4000))
-                    ));
-                }
-                await interaction.editReply({ embeds: [logEmbeds[0]] });
-                for (let i = 1; i < logEmbeds.length; i++) {
-                    await sleep(1200);
-                    await interaction.followUp({ embeds: [logEmbeds[i]] });
-                }
-            }
+    await interaction.deferReply();
+    const mesaj = "ANALARINIZI ORTAYA ALIP KUCAK KUCAĞA TUTTUGUNUZ JOTUNUN KEYFINI CIKARIN";
+    for (let i = 0; i < 20; i++) {
+        const embed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setDescription(
+                Array(10).fill(mesaj).join("\n")
+            );
+        if (i === 0) {
+            await interaction.editReply({ embeds: [embed] });
+        } else {
+            await interaction.followUp({ embeds: [embed] });
+        }
+    }
+    return;
+}
 
             if (interaction.commandName === "genelsonuc") {
                 await interaction.deferReply();
